@@ -178,6 +178,8 @@ export function generateTrigger(
 
     hasPopupMouseDown: boolean;
 
+    hideOnMouseOut: Element | null;
+
     constructor(props: TriggerProps) {
       super(props);
 
@@ -202,6 +204,36 @@ export function generateTrigger(
 
     componentDidMount() {
       this.componentDidUpdate();
+      // This is a special case for handling disabled elements. When a tooltip is
+      // shown on a tooltip element, the flag is activated and the next time this
+      // event listener is called the tooltip is hidden. This happens because
+      // a mouseover event will be triggered when the cursor leaves a disabled
+      // element.
+      // See: https://github.com/facebook/react/issues/4251#issuecomment-334266778
+      document.addEventListener('mouseover', e => {
+        const target = e.target as Element;
+        if (
+          !this.hideOnMouseOut ||
+          // needed to work on Firefox
+          this.hideOnMouseOut === target
+        ) {
+          return;
+        }
+
+        // if the event comes from one of the child elements
+        // then do not hide the tooltip
+        if (
+          this.hideOnMouseOut.firstElementChild &&
+          this.hideOnMouseOut.contains &&
+          this.hideOnMouseOut.contains(target)
+        ) {
+          return;
+        }
+
+        this.fireEvents('onMouseLeave', e);
+        this.delaySetPopupVisible(false, this.props.mouseLeaveDelay);
+        this.hideOnMouseOut = null;
+      });
     }
 
     componentDidUpdate() {
@@ -266,6 +298,9 @@ export function generateTrigger(
 
     onMouseEnter = e => {
       const { mouseEnterDelay } = this.props;
+      if ((e.target as any).disabled) {
+        this.hideOnMouseOut = e.target as Element;
+      }
       this.fireEvents('onMouseEnter', e);
       this.delaySetPopupVisible(
         true,
